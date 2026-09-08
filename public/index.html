@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ReviewHub — films & books, reviewed</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎞️</text></svg>" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">🎞️</span>
+      <div>
+        <h1>ReviewHub</h1>
+        <p>Films and books, reviewed by people who finished them.</p>
+      </div>
+    </div>
+
+    <nav class="tabs" id="tabs">
+      <button class="tab is-active" data-view="catalogue">Catalogue</button>
+      <button class="tab" data-view="critics">Critics</button>
+      <button class="tab" data-view="disagreements">Disagreements</button>
+    </nav>
+
+    <div class="status" id="ai-status" title="Extraction backend"></div>
+  </header>
+
+  <main>
+    <!-- Catalogue ------------------------------------------------------- -->
+    <section class="view is-active" id="view-catalogue">
+      <div class="layout">
+        <div class="column-main">
+          <div class="toolbar">
+            <div class="pills" id="kind-filter">
+              <button class="pill is-active" data-kind="">Everything</button>
+              <button class="pill" data-kind="movie">Films</button>
+              <button class="pill" data-kind="book">Books</button>
+            </div>
+            <input id="search" class="search" type="search"
+                   placeholder="Search a title or a director / author…"
+                   autocomplete="off" />
+          </div>
+
+          <div class="grid" id="title-grid"></div>
+        </div>
+
+        <aside class="column-side">
+          <div class="panel">
+            <h2>Recent activity</h2>
+            <ul class="activity" id="activity"></ul>
+          </div>
+
+          <div class="panel">
+            <h2>Tags</h2>
+            <div class="tag-cloud" id="tag-cloud"></div>
+            <div id="tag-results"></div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- Critics --------------------------------------------------------- -->
+    <section class="view" id="view-critics">
+      <div class="panel wide">
+        <h2>Critics</h2>
+        <p class="panel-note">Everyone who has posted at least one review, with the title they rated highest.</p>
+        <div id="critics"></div>
+      </div>
+    </section>
+
+    <!-- Disagreements --------------------------------------------------- -->
+    <section class="view" id="view-disagreements">
+      <div class="panel wide">
+        <h2>Where critics disagree</h2>
+        <p class="panel-note">Pairs of people who reviewed the same title and landed at least two points apart.</p>
+        <div id="disagreements"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Title detail ------------------------------------------------------ -->
+  <div class="overlay" id="overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="detail-title">
+      <button class="sheet-close" id="close-detail" aria-label="Close">&times;</button>
+      <div id="detail"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
