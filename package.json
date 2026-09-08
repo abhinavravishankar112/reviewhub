@@ -1,0 +1,20 @@
+{
+  "name": "reviewhub",
+  "version": "1.0.0",
+  "description": "Movie & book review hub — Postgres relational core + Gemini structured extraction",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "db:setup": "node db/setup.js",
+    "db:reset": "node db/setup.js --reset"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@google/genai": "^1.30.0",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "pg": "^8.16.3"
+  }
+}
