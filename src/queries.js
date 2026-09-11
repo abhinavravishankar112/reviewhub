@@ -127,6 +127,19 @@ async function listReviewsForTitle(titleId) {
 // Leaderboard. INNER JOIN users -> reviews (a critic with no reviews is not a
 // critic), then a LEFT JOIN LATERAL to pull each critic's highest-rated title
 // without a second round trip.
+//
+// The LEFT JOIN onto `ai_extractions` puts the model's own read of each review
+// beside the human one. It stays a LEFT JOIN because a review queued but never
+// extracted (see src/lib/queue.js — jobs are lost on restart) must not remove
+// the critic from the board, and it cannot inflate COUNT(r.id): the FK on
+// ai_extractions is UNIQUE, so a review matches at most one extraction row.
+//
+// The `status = 'done'` filter is the important part of ai_avg_rating. A
+// pending, running or failed extraction still has a row, with rating_guess
+// NULL — AVG already skips NULLs, so an unfiltered average would look right
+// while quietly being computed over whichever reviews happened to finish. The
+// filter makes that restriction explicit rather than accidental, and keeps the
+// column honest if a failed row is ever backfilled with a partial guess.
 // ---------------------------------------------------------------------------
 async function listCritics() {
   const { rows } = await query(
@@ -136,10 +149,15 @@ async function listCritics() {
             u.display_name,
             COUNT(r.id)                      AS review_count,
             ROUND(AVG(r.rating)::numeric, 1) AS avg_rating,
+            ROUND(AVG(x.rating_guess) FILTER (WHERE x.status = 'done')::numeric, 1)
+                                             AS ai_avg_rating,
+            COUNT(*) FILTER (WHERE x.sentiment = 'mixed')
+                                             AS mixed_sentiment_count,
             fav.name                         AS favourite_title,
             fav.cover_emoji                  AS favourite_emoji
     FROM users u
-    INNER JOIN reviews r ON r.user_id = u.id
+    INNER JOIN reviews r        ON r.user_id   = u.id
+    LEFT  JOIN ai_extractions x ON x.review_id = r.id
     LEFT JOIN LATERAL (
         SELECT t.name, t.cover_emoji
         FROM reviews r2
@@ -148,6 +166,9 @@ async function listCritics() {
         ORDER BY r2.rating DESC, r2.created_at ASC
         LIMIT 1
     ) AS fav ON TRUE
+    -- Unchanged: both new columns are aggregates over the joined rows, not
+    -- extra grouping keys. Only fav.* needs naming here, because the LATERAL
+    -- yields one row per user and Postgres cannot infer that from u.id alone.
     GROUP BY u.id, fav.name, fav.cover_emoji
     ORDER BY COUNT(r.id) DESC, u.display_name ASC
     `
@@ -206,6 +227,18 @@ async function listReviewsByTag(slug) {
 // reviewed the same title, so the app can show where critics disagree most.
 // `a.user_id < b.user_id` keeps one row per pair instead of both directions
 // (and, as a side effect, excludes a review pairing with itself).
+//
+// Each side of the self join gets its own LEFT JOIN onto `ai_extractions`, so
+// the pair carries the model's independent guess for both reviews and the UI
+// can ask whose rating the AI landed nearer. The model never sees the
+// reviewer's own rating (see src/ai/prompt.js), which is what makes that
+// comparison worth anything.
+//
+// No `status = 'done'` filter is needed here, unlike the average in
+// listCritics: these are per-row values, not aggregates. A pending or failed
+// extraction simply has rating_guess = NULL and arrives as null, visible for
+// what it is — whereas a NULL folded into an AVG disappears and silently
+// shrinks the denominator.
 // ---------------------------------------------------------------------------
 async function findRatingDisagreements(minGap = 2) {
   const { rows } = await query(
@@ -216,13 +249,17 @@ async function findRatingDisagreements(minGap = 2) {
             a.rating        AS rating_a,
             ub.display_name AS critic_b,
             b.rating        AS rating_b,
-            ABS(a.rating - b.rating) AS gap
+            ABS(a.rating - b.rating) AS gap,
+            x_a.rating_guess AS ai_rating_a,
+            x_b.rating_guess AS ai_rating_b
     FROM reviews a
-    INNER JOIN reviews b ON b.title_id = a.title_id
-                        AND a.user_id  < b.user_id
-    INNER JOIN titles t  ON t.id = a.title_id
-    INNER JOIN users ua  ON ua.id = a.user_id
-    INNER JOIN users ub  ON ub.id = b.user_id
+    INNER JOIN reviews b          ON b.title_id  = a.title_id
+                                 AND a.user_id   < b.user_id
+    INNER JOIN titles t           ON t.id        = a.title_id
+    INNER JOIN users ua           ON ua.id       = a.user_id
+    INNER JOIN users ub           ON ub.id       = b.user_id
+    LEFT  JOIN ai_extractions x_a ON x_a.review_id = a.id
+    LEFT  JOIN ai_extractions x_b ON x_b.review_id = b.id
     WHERE ABS(a.rating - b.rating) >= $1
     ORDER BY ABS(a.rating - b.rating) DESC
     LIMIT 10
